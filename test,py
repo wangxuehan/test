@@ -1,0 +1,164 @@
+#!/usr/bin/env python
+
+import sys
+import re
+import rpy2.robjects as robjects
+from rpy2.robjects.packages import importr
+vd=importr('VennDiagram')
+sample1=sys.argv[1].strip()
+sample2=sys.argv[2].strip()
+sample1seq=sys.argv[3].strip()
+sample2seq=sys.argv[4].strip()
+
+sam1={}
+sam2={}
+Tol_total=0
+reg=re.compile(r'>(\w+)\((\d+)\)')
+for eachLine in open(sample1seq):
+        if eachLine.startswith('>'):
+                seq=reg.search(eachLine).group(1)
+                fold=int(reg.search(eachLine).group(2))
+                sam1[seq]=fold
+                Tol_total+=fold
+for eachLine in open(sample2seq):
+        if eachLine.startswith('>'):
+                seq=reg.search(eachLine).group(1)
+                fold=int(reg.search(eachLine).group(2))
+                sam2[seq]=fold
+                Tol_total+=fold
+uni_seq=list(set(sam1.keys()) | set(sam2.keys()))
+Uni_total=len(uni_seq)
+result=[]
+for eachseq in uni_seq:
+        result.append(eachseq+'\t'+str(sam1.get(eachseq,0))+'\t'+str(sam2.get(eachseq,0))+'\n')
+overview=open(sample1+'_vs_'+sample2+'_venn_stat.txt','w')
+overview.writelines(result)
+del sam1
+del sam2
+del uni_seq
+
+
+Uni_sam1_sam2=0
+Tol_sam1_sam2=0
+Uni_sam1_sp=0
+Tol_sam1_sp=0
+Uni_sam2_sp=0
+Tol_sam2_sp=0
+for each in result:
+        temp=each.strip().split()
+        if temp[1] != '0' and temp[2] != '0':
+                Uni_sam1_sam2+=1
+                Tol_sam1_sam2+=(int(temp[1])+int(temp[2]))
+        if temp[1] != '0' and temp[2] == '0':
+                Uni_sam1_sp+=1
+                Tol_sam1_sp+=int(temp[1])
+        if temp[1] == '0' and temp[2] != '0':
+                Uni_sam2_sp+=1
+                Tol_sam2_sp+=int(temp[2])
+
+Uni_sam1_sam2_percent=str(round(float(Uni_sam1_sam2*100)/Uni_total,2))+'%'
+Uni_sam1_sp_percent=str(round(float(Uni_sam1_sp*100)/Uni_total,2))+'%'
+Uni_sam2_sp_percent=str(round(float(Uni_sam2_sp*100)/Uni_total,2))+'%'
+
+Tol_sam1_sam2_percent=str(round(float(Tol_sam1_sam2*100)/Tol_total,2))+'%'
+Tol_sam1_sp_percent=str(round(float(Tol_sam1_sp*100)/Tol_total,2))+'%'
+Tol_sam2_sp_percent=str(round(float(Tol_sam2_sp*100)/Tol_total,2))+'%'
+
+result=[]
+result.append('category\tUnique sRNAs\tpercent(%)\tTotal sRNAs\tpercent(%)\n')
+result.append('Total_sRNAs\t'+str(Uni_total)+'\t100.00%\t'+str(Tol_total)+'\t100.00%\n')
+result.append('sample1_&_sample2\t'+str(Uni_sam1_sam2)+'\t'+Uni_sam1_sam2_percent+'\t'+str(Tol_sam1_sam2)+'\t'+Tol_sam1_sam2_percent+'\n')
+result.append('sample1_specific\t'+str(Uni_sam1_sp)+'\t'+Uni_sam1_sp_percent+'\t'+str(Tol_sam1_sp)+'\t'+Tol_sam1_sp_percent+'\n')
+result.append('sample2_specific\t'+str(Uni_sam2_sp)+'\t'+Uni_sam2_sp_percent+'\t'+str(Tol_sam2_sp)+'\t'+Tol_sam2_sp_percent+'\n')
+overview.writelines(result)
+overview.close()
+
+png=robjects.r['png']
+pdf=robjects.r['pdf']
+plot_new=robjects.r['plot.new']
+dev_off=robjects.r['dev.off']
+legend=robjects.r['legend']
+title=robjects.r['title']
+
+filename1=robjects.StrVector(['%s_vs_%s_venn_chart_uni.png' % (sample1,sample2)])
+png(filename=filename1,type="cairo",width=480*4,height=480*4,res=72*4)
+plot_new()
+
+venn_plot = vd.draw_pairwise_venn(
+        area1 = Uni_sam2_sp+Uni_sam1_sam2,
+        area2 = Uni_sam1_sp+Uni_sam1_sam2,
+        cross_area = Uni_sam1_sam2,
+        fill = robjects.StrVector(["blue", "red"]),
+        lty = "blank",
+        cex = 1,
+        scale=False,
+        margin = 0.2
+        )
+main=robjects.StrVector(['Venn chart for uniq_sRNAs\n(%s vs %s)' % (sample1,sample2)])
+title(main=main)
+legend_name=['%s specific (%s)' % (sample1,Uni_sam1_sp_percent), '%s & %s (%s)' % (sample1,sample2,Uni_sam1_sam2_percent), '%s specific (%s)' % (sample2,Uni_sam2_sp_percent)]
+fill=robjects.StrVector(['#ff8080','#8040bf','#8080ff'])
+legend('topright',robjects.StrVector(legend_name),fill=fill)
+dev_off()
+
+filename2=robjects.StrVector(['%s_vs_%s_venn_chart_uni.pdf' % (sample1,sample2)])
+pdf(file=filename2)
+plot_new()
+venn_plot = vd.draw_pairwise_venn(
+        area1 = Uni_sam2_sp+Uni_sam1_sam2,
+        area2 = Uni_sam1_sp+Uni_sam1_sam2,
+        cross_area = Uni_sam1_sam2,
+        fill = robjects.StrVector(["blue", "red"]),
+        lty = "blank",
+        cex = 1,
+        scale=False,
+        margin = 0.2
+        )
+main=robjects.StrVector(['Venn chart for uniq_sRNAs\n(%s vs %s)' % (sample1,sample2)])
+title(main=main)
+legend_name=['%s specific (%s)' % (sample1,Uni_sam1_sp_percent), '%s & %s (%s)' % (sample1,sample2,Uni_sam1_sam2_percent), '%s specific (%s)' % (sample2,Uni_sam2_sp_percent)]
+fill=robjects.StrVector(['#ff8080','#8040bf','#8080ff'])
+legend('topright',robjects.StrVector(legend_name),fill=fill)
+dev_off()
+
+
+filename3=robjects.StrVector(['%s_vs_%s_venn_chart_Tol.png' % (sample1,sample2)])
+png(filename=filename3,type="cairo",width=480*4,height=480*4,res=72*4)
+plot_new()
+
+venn_plot = vd.draw_pairwise_venn(
+        area1 = Tol_sam2_sp+Tol_sam1_sam2,
+        area2 = Tol_sam1_sp+Tol_sam1_sam2,
+        cross_area = Tol_sam1_sam2,
+        fill = robjects.StrVector(["blue", "red"]),
+        lty = "blank",
+        cex = 1,
+        scale=False,
+        margin=0.2
+        )
+main=robjects.StrVector(['Venn chart for total_sRNAs\n(%s vs %s)' % (sample1,sample2)])
+title(main=main)
+legend_name=['%s specific (%s)' % (sample1,Tol_sam1_sp_percent), '%s & %s (%s)' % (sample1,sample2,Tol_sam1_sam2_percent), '%s specific (%s)' % (sample2,Tol_sam2_sp_percent)]
+fill=robjects.StrVector(['#ff8080','#8040bf','#8080ff'])
+legend('topright',robjects.StrVector(legend_name),fill=fill)
+dev_off()
+
+filename4=robjects.StrVector(['%s_vs_%s_venn_chart_Tol.pdf' % (sample1,sample2)])
+pdf(file=filename4)
+plot_new()
+venn_plot = vd.draw_pairwise_venn(
+        area1 = Tol_sam2_sp+Tol_sam1_sam2,
+        area2 = Tol_sam1_sp+Tol_sam1_sam2,
+        cross_area = Tol_sam1_sam2,
+        fill = robjects.StrVector(["blue", "red"]),
+        lty = "blank",
+        cex = 1,
+        scale=False,
+        margin=0.2
+        )
+main=robjects.StrVector(['Venn chart for total_sRNAs\n(%s vs %s)' % (sample1,sample2)])
+title(main=main)
+legend_name=['%s specific (%s)' % (sample1,Tol_sam1_sp_percent), '%s & %s (%s)' % (sample1,sample2,Tol_sam1_sam2_percent), '%s specific (%s)' % (sample2,Tol_sam2_sp_percent)]
+fill=robjects.StrVector(['#ff8080','#8040bf','#8080ff'])
+legend('topright',robjects.StrVector(legend_name),fill=fill)
+dev_off()
